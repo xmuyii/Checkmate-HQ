@@ -1,0 +1,4 @@
+aiogram==3.4.1
+httpx==0.25.2
+python-dotenv==1.0.0
+supabase==2.0.1
