@@ -2,8 +2,8 @@ import json
 import os
 from datetime import datetime, timedelta
 
-DB_FILE = "players.json"
-SECTORS_FILE = "sectors.txt"
+DB_FILE = os.environ.get("DB_FILE", "players.json")
+SECTORS_FILE = os.environ.get("SECTORS_FILE", "sectors.txt")
 
 def load_data():
     if not os.path.exists(DB_FILE):
@@ -25,30 +25,48 @@ def get_user(user_id):
     return all_data.get(str(user_id))
 
 def load_sectors():
-    """Load all sectors from sectors.txt"""
+    """Load all sectors from sectors.txt.
+    Returns {sector_id: {"name": str, "environment": str, "energy": str, "perks": str}}
+    """
     sectors = {}
     if not os.path.exists(SECTORS_FILE):
         return sectors
-    
+
     with open(SECTORS_FILE, "r", encoding="utf-8") as f:
         lines = f.readlines()
-    
-    # Skip header row
+
     for line in lines[1:]:
         line = line.strip()
         if not line or line.startswith("SectorID"):
             continue
-        
+
         parts = line.split("\t")
         if len(parts) >= 4:
             try:
                 sector_id = int(parts[0])
-                sector_name = parts[3]
-                sectors[sector_id] = sector_name
-            except:
+                sectors[sector_id] = {
+                    "name": parts[3].strip(),
+                    "environment": parts[1].strip() if len(parts) > 1 else "",
+                    "energy": parts[2].strip() if len(parts) > 2 else "",
+                    "perks": parts[4].strip() if len(parts) > 4 else "",
+                }
+            except Exception:
                 pass
-    
+
     return sectors
+
+
+def get_sector_display(sector_id, sectors=None):
+    """Return a short display string like '#8 Hollow Echoes'."""
+    if sector_id is None:
+        return "Not Assigned"
+    if sectors is None:
+        sectors = load_sectors()
+    sid = int(sector_id)
+    info = sectors.get(sid)
+    if info:
+        return f"#{sid} {info['name']}"
+    return f"Sector {sid}"
 
 def register_user(user_id, username):
     """Register a new player with default stats"""
@@ -180,8 +198,8 @@ def add_inventory_item(user_id, item_type, xp_reward=0, expires_at=None):
     if len(inventory) >= slots:
         return False  # Inventory full
     
-    # Generate unique ID based on current inventory size
-    item_id = len(inventory)
+    # Generate unique ID (max existing + 1, never reuse after deletions)
+    item_id = (max((it.get("id", 0) for it in inventory), default=-1) + 1)
     
     item = {
         "id": item_id,
@@ -278,6 +296,7 @@ def get_profile(user_id):
         "xp_needed": xp_needed,
         "silver": user.get("silver", 0),
         "sector": user.get("sector"),
+        "sector_display": get_sector_display(user.get("sector")),
         "weekly_points": user.get("weekly_points", 0),
         "all_time_points": user.get("all_time_points", 0),
         "backpack_slots": user.get("backpack_slots", 5),
@@ -320,7 +339,7 @@ def add_unclaimed_item(user_id, item_type, amount=1, multiplier_value=None):
     unclaimed = user.get("unclaimed_items", [])
     
     item = {
-        "id": len(unclaimed),
+        "id": (max((it.get("id", 0) for it in unclaimed), default=-1) + 1),
         "type": item_type,
         "amount": amount,
         "multiplier_value": multiplier_value,  # For multiplier items
@@ -370,7 +389,7 @@ def claim_item(user_id, item_id):
     
     # Add to inventory
     new_item = {
-        "id": len(inventory),
+        "id": (max((it.get("id", 0) for it in inventory), default=-1) + 1),
         "type": item.get("type"),
         "xp_reward": item.get("amount", 0),
         "multiplier_value": item.get("multiplier_value"),
