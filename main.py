@@ -1171,8 +1171,8 @@ async def on_group_message(message: types.Message):
     u_id = str(message.from_user.id)
 
     # ── New player enters the group ───────────────────────
-    if not get_user(u_id):
-        
+    user = get_user(u_id)
+    if not user:
         # Only react occasionally so it's not spammy for every message
         if random.random() < 0.3:
             await message.reply(
@@ -1224,14 +1224,18 @@ async def on_group_message(message: types.Message):
         pts = len(guess) - 2
         engine.used_words.append(guess)
 
-        add_points(u_id, pts, message.from_user.first_name)
+        # Load user to get database username
+        user = get_user(u_id)
+        username = user.get("username", message.from_user.first_name) if user else message.from_user.first_name
+        
+        add_points(u_id, pts, username)
         add_xp(u_id, pts)
         old_level, new_level = check_level_up(u_id)
 
         if u_id not in engine.scores:
             engine.scores[u_id] = {
                 "pts": 0,
-                "name": message.from_user.first_name,
+                "name": username,
                 "user_id": u_id,
                 "leveled_up": False
             }
