@@ -1,9 +1,18 @@
 import asyncio
 import random
 import httpx
+import logging
+import signal
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+# ── Logging Setup ──────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 from database import (
     get_user, register_user,
     add_points, get_weekly_leaderboard, get_alltime_leaderboard,
@@ -20,7 +29,7 @@ from fusion_handlers import word_fusion_router
 from initiation import initiation_router
 
 # ── Config ────────────────────────────────────────────────────────────────
-API_TOKEN    = '8770224655:AAElFUaS_9ZMFsowhkWPtSU_9LwzdKMqGoU'
+API_TOKEN    = '8770224655:AAHwmeIEnu0IPusu8XzumEhmMOLGcCGqMs0'
 SUPABASE_URL = 'https://basniiolppmtpzishhtn.supabase.co'.rstrip('/')
 SUPABASE_KEY = ('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhc25paW9scHBtdHB6aXNoaHRuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTQ3NjMwOCwiZXhwIjoyMDkxMDUyMzA4fQ.qrj1BO5dNilRDvgKtvTdwIWjBhFTRyGzuHPD271Xcac')
 
@@ -155,7 +164,9 @@ async def run_auto_harvest(chat_id: int):
             engine.used_words   = []
             engine.message_count = 0
             engine.active       = True
-            engine.round_over_event.clear()
+            # Recreate the event to avoid stale state from previous rounds
+            engine.round_over_event = asyncio.Event()
+            logger.info(f"Round started for chat {chat_id}")
 
             engine.word1, engine.word2 = await fetch_supabase_words()
             engine.letters = (engine.word1 + engine.word2).lower()
@@ -189,6 +200,7 @@ async def run_auto_harvest(chat_id: int):
 
             # ── Round is over ────────────────────────────────────────────
             engine.active = False
+            logger.info(f"Round ended for chat {chat_id} with {len(engine.scores)} players")
 
             sorted_scores = sorted(
                 engine.scores.values(), key=lambda x: x['pts'], reverse=True
@@ -266,6 +278,7 @@ async def run_auto_harvest(chat_id: int):
     except asyncio.CancelledError:
         engine.active  = False
         engine.running = False
+        logger.info(f"Game loop cancelled for chat {chat_id}")
 
 
 async def _round_timer(chat_id: int, engine: GameEngine):
@@ -283,7 +296,8 @@ async def _round_timer(chat_id: int, engine: GameEngine):
 
         crate_msg = await bot.send_message(
             chat_id,
-            "⚡ *CRATE DROP!* React to this message — first 3 get a Super Crate!",
+            f"⚡ *CRATE DROP!* The crates descend from the sky!\n"
+            f"🎁 Wonder what you need to do...",
             parse_mode="Markdown"
         )
         engine.crate_drop_message_id = crate_msg.message_id
@@ -1070,8 +1084,32 @@ async def use_item_handler(message: types.Message):
 # ═══════════════════════════════════════════════════════════════════════════
 
 async def main():
+    logger.info("Starting bot...")
     await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+    
+    # Graceful shutdown on signals
+    loop = asyncio.get_event_loop()
+    
+    async def shutdown_signal():
+        logger.info("Shutdown signal received, stopping bot gracefully...")
+        await dp.fsm.storage.close()
+        loop.stop()
+    
+    # Register signal handlers
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(
+            sig, lambda: asyncio.create_task(shutdown_signal())
+        )
+    
+    try:
+        logger.info("Bot polling started")
+        await dp.start_polling(bot)
+    except KeyboardInterrupt:
+        logger.info("Bot interrupted by user")
+    except Exception as e:
+        logger.error(f"Bot error: {e}", exc_info=True)
+    finally:
+        logger.info("Bot stopped")
 
 if __name__ == "__main__":
     asyncio.run(main())
