@@ -9,7 +9,8 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ChatMember
 from database import (
     get_user, register_user, add_silver, set_sector, 
-    add_inventory_item, get_profile, add_xp, save_user, load_sectors, add_unclaimed_item
+    add_inventory_item, get_profile, add_xp, save_user, load_sectors,
+    add_unclaimed_item, get_sector_display
 )
 
 # Reuse credentials from main.py
@@ -18,7 +19,7 @@ SUPABASE_URL = 'https://basniiolppmtpzishhtn.supabase.co'.rstrip('/')
 SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhc25paW9scHBtdHB6aXNoaHRuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTQ3NjMwOCwiZXhwIjoyMDkxMDUyMzA4fQ.qrj1BO5dNilRDvgKtvTdwIWjBhFTRyGzuHPD271Xcac'
 
 # GROUP CONFIG
-CHECKMATE_HQ_GROUP_ID = -1001234567890  # Replace with actual Checkmate HQ group ID
+CHECKMATE_HQ_GROUP_ID = -1003835925366  # Replace with actual Checkmate HQ group ID
 
 bot = Bot(token=API_TOKEN)
 
@@ -297,11 +298,10 @@ async def backpack_choice_handler(callback: types.CallbackQuery, state: FSMConte
     is_premium = choice == "backpack_premium"
     
     if is_premium:
-        # Premium is locked - just acknowledge
-        await callback.answer("Payment system coming soon!")
-        await callback.message.edit_text(
-            "🃏 *GameMaster:* \"The transaction system isn't ready yet. You'll stick with the basic backpack for now.\"",
-            parse_mode="Markdown"
+        # Premium is locked - show alert but keep the keyboard so user can still pick Normal Backpack
+        await callback.answer(
+            "Payment system coming soon! Please choose the Normal Backpack for now.",
+            show_alert=True
         )
         return
     
@@ -313,13 +313,16 @@ async def backpack_choice_handler(callback: types.CallbackQuery, state: FSMConte
         # They've already done this tutorial - give no rewards
         sector_id = user.get("sector")
         all_sectors = load_sectors()
-        sector_name = all_sectors.get(int(sector_id), f"Sector {sector_id}")
-        
+        info = all_sectors.get(int(sector_id), {}) if sector_id else {}
+        sector_name = info.get("name", f"Sector {sector_id}") if info else f"Sector {sector_id}"
+        sector_perks = info.get("perks", "") if info else ""
+
         await callback.message.edit_text(
             f"🃏 *GameMaster:* \"Trying to run the tutorial again, are we? How *delightfully* transparent.\"\n\n"
             f"\"I've already seen all your tricks. You get NOTHING this time.\"\n\n"
-            f"📍 You're in: **{sector_name.upper()}** (Sector {sector_id})\n"
-            f"🎒 Backpack: Normal (5 slots)\n\n"
+            f"📍 You're in: **#{sector_id} {sector_name.upper()}**\n"
+            + (f"⚡ Perks: {sector_perks}\n" if sector_perks else "")
+            + f"🎒 Backpack: Normal (5 slots)\n\n"
             f"Now run along. Type `!fusion` in the group when you're ready to play.",
             parse_mode="Markdown"
         )
@@ -329,15 +332,18 @@ async def backpack_choice_handler(callback: types.CallbackQuery, state: FSMConte
     # FIRST-TIME COMPLETION: Award unclaimed items
     
     # Get or assign sector (only assign if they don't already have one)
+    all_sectors = load_sectors()
     if user and user.get("sector"):
         sector_id = user.get("sector")
-        all_sectors = load_sectors()
-        sector_name = all_sectors.get(int(sector_id), f"Sector {sector_id}")
+        info = all_sectors.get(int(sector_id), {})
     else:
         # Assign random sector from 1-9 (starting sectors only)
-        all_sectors = load_sectors()
         sector_id = random.randint(1, 9)
-        sector_name = all_sectors.get(sector_id, f"Sector {sector_id}")
+        info = all_sectors.get(sector_id, {})
+
+    sector_name = info.get("name", f"Sector {sector_id}") if info else f"Sector {sector_id}"
+    sector_env = info.get("environment", "") if info else ""
+    sector_perks = info.get("perks", "") if info else ""
     
     # Store sector as ID
     set_sector(user_id, sector_id)
@@ -380,8 +386,10 @@ async def backpack_choice_handler(callback: types.CallbackQuery, state: FSMConte
         f"✨ *TUTORIAL COMPLETE!*\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"🌍 **YOU ARE BEING DROPPED IN:**\n"
-        f"📍 *{sector_name.upper()}* (Sector {sector_id})\n\n"
-        f"🎒 **BACKPACK TYPE:** Normal Backpack (5 slots)\n\n"
+        f"📍 *#{sector_id} {sector_name.upper()}*\n"
+        + (f"🗺️ {sector_env}\n" if sector_env else "")
+        + (f"⚡ Perks: {sector_perks}\n" if sector_perks else "")
+        + f"\n🎒 **BACKPACK TYPE:** Normal Backpack (5 slots)\n\n"
         f"🎁 **STARTER REWARDS WAITING:**\n"
         f"You've received 5 items! They are **unclaimed**.\n\n"
         f"📦 Items Awaiting:\n"
@@ -393,9 +401,9 @@ async def backpack_choice_handler(callback: types.CallbackQuery, state: FSMConte
         f"**WHAT TO DO NEXT:**\n"
         f"1️⃣ Send DM: `!claims` to see unclaimed items\n"
         f"2️⃣ Click [CLAIM] on each item to add to inventory\n"
-        f"3️⃣ Send DM: `/inventory` to see claimed items\n"
+        f"3️⃣ Send DM: `!inventory` to see claimed items\n"
         f"4️⃣ Go to **Checkmate HQ** group\n"
-        f"5️⃣ Type `/fusion` to start playing!\n\n"
+        f"5️⃣ Type `!fusion` to start playing!\n\n"
         f"🃏 *GameMaster:* \"Welcome to The 64, {username}. Try not to disappoint me.\"",
         parse_mode="Markdown"
     )
