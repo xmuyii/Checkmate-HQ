@@ -1073,8 +1073,47 @@ async def use_item_handler(message: types.Message):
 # ═══════════════════════════════════════════════════════════════════════════
 
 async def main():
+    import signal
+
+    # Tell Telegram to forget any existing webhook / long-poll session.
+    # This is what kills the "Conflict" error — the old session is explicitly
+    # closed before we open a new one.
     await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+
+    # Graceful shutdown on SIGTERM (Railway sends this before killing the container)
+    # and SIGINT (Ctrl-C locally).  Without this the old instance keeps its
+    # getUpdates connection open for ~30 s, causing the conflict.
+    loop = asyncio.get_running_loop()
+    stop = asyncio.Event()
+
+    def _signal_handler():
+        stop.set()
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, _signal_handler)
+        except (NotImplementedError, OSError):
+            # Windows doesn't support add_signal_handler — fall back silently
+            pass
+
+    # Start polling in a background task so we can await the stop event
+    polling_task = asyncio.create_task(
+        dp.start_polling(bot, handle_signals=False)
+    )
+
+    # Block until a shutdown signal arrives
+    await stop.wait()
+
+    # Cancel polling cleanly — aiogram will flush pending handlers
+    polling_task.cancel()
+    try:
+        await polling_task
+    except asyncio.CancelledError:
+        pass
+
+    # Close the bot session so Telegram releases the getUpdates connection
+    await bot.session.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
