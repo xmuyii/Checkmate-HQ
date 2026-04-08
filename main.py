@@ -20,6 +20,7 @@ from database import (
     use_silver,
     remove_inventory_item,
     load_sectors,
+    get_sector_display,
     save_user,
     calculate_level,
     check_level_up,
@@ -553,7 +554,7 @@ async def show_profile(message: types.Message):
         f"🎖️ *LEVEL {profile['level']}*\n"
         f"⭐ XP: {profile['xp']} | [{xp_bar}] {profile['xp_progress']}/{profile['xp_needed']}\n\n"
         f"💰 Silver: {profile['silver']}\n"
-        f"📍 Sector: {profile['sector'] or 'Not Assigned'}\n\n"
+        f"📍 Sector: {profile['sector_display']}\n\n"
         f"📊 *STATS*\n"
         f"├─ Weekly Points: {profile['weekly_points']}\n"
         f"└─ All-Time Points: {profile['all_time_points']}\n\n"
@@ -597,39 +598,40 @@ async def show_inventory(message: types.Message):
         return
 
     keyboard = []
-    for i, item in enumerate(inventory):
+    for item in inventory:
+        item_id = item.get("id")
         item_type = item.get("type", "").lower()
         xp_reward = item.get("xp_reward", 0)
 
         if "wood" in item_type and "crate" in item_type:
             text = f"🪵 WOOD CRATE ({xp_reward} XP)"
-            cb = f"open_{i}"
+            cb = f"open_{item_id}"
         elif "bronze" in item_type and "crate" in item_type:
             text = f"🥉 BRONZE CRATE ({xp_reward} XP)"
-            cb = f"open_{i}"
+            cb = f"open_{item_id}"
         elif "iron" in item_type and "crate" in item_type:
             text = f"⚙️ IRON CRATE ({xp_reward} XP)"
-            cb = f"open_{i}"
+            cb = f"open_{item_id}"
         elif "super" in item_type and "crate" in item_type:
             text = f"🎁 SUPER CRATE ({xp_reward} XP)"
-            cb = f"open_{i}"
+            cb = f"open_{item_id}"
         elif item_type == "shield":
             text = "🛡️ SHIELD [LOCKED]"
-            cb = f"use_{i}"
+            cb = f"use_{item_id}"
         elif item_type == "teleport":
             text = "🌀 TELEPORT (Choose Sector)"
-            cb = f"teleport_{i}"
+            cb = f"teleport_{item_id}"
         elif "multiplier" in item_type:
             mult = item.get("multiplier_value", 2)
             label = "XP" if "xp" in item_type else "SILVER"
             text = f"⚡ {label} MULTIPLIER x{mult}"
-            cb = f"use_{i}"
+            cb = f"use_{item_id}"
         elif "locked_" in item_type:
             text = f"🔒 LEGENDARY ITEM [TOO POWERFUL]"
-            cb = f"info_{i}"
+            cb = f"info_{item_id}"
         else:
             text = f"❓ {item_type.upper()}"
-            cb = f"use_{i}"
+            cb = f"use_{item_id}"
 
         keyboard.append([InlineKeyboardButton(text=text, callback_data=cb)])
 
@@ -788,13 +790,13 @@ async def info_item_callback(callback: types.CallbackQuery):
     )
 
 
-async def _open_crate(message: types.Message, user_id: str, crate_index: int):
+async def _open_crate(message: types.Message, user_id: str, item_id: int):
     inventory = get_inventory(user_id)
-    if crate_index < 0 or crate_index >= len(inventory):
+    crate = next((it for it in inventory if it.get("id") == item_id), None)
+    if not crate:
         await message.answer("🃏 *GameMaster:* \"Invalid crate.\"", parse_mode="Markdown")
         return
 
-    crate = inventory[crate_index]
     if "crate" not in crate.get("type", "").lower():
         await message.answer(
             "🃏 *GameMaster:* \"That's not a crate. Learn to read or don't, who cares?.\"",
@@ -814,13 +816,13 @@ async def _open_crate(message: types.Message, user_id: str, crate_index: int):
     )
 
 
-async def _use_item(message: types.Message, user_id: str, item_index: int):
+async def _use_item(message: types.Message, user_id: str, item_id: int):
     inventory = get_inventory(user_id)
-    if item_index < 0 or item_index >= len(inventory):
+    item = next((it for it in inventory if it.get("id") == item_id), None)
+    if not item:
         await message.answer("🃏 *GameMaster:* \"Invalid item.\"", parse_mode="Markdown")
         return
 
-    item = inventory[item_index]
     item_type = item.get("type", "unknown").lower()
 
     if "crate" in item_type:
@@ -869,7 +871,10 @@ async def teleport_destination(callback: types.CallbackQuery):
         return
 
     all_sectors = load_sectors()
-    sector_name = all_sectors.get(sector_id, f"Sector {sector_id}")
+    info = all_sectors.get(sector_id, {})
+    sector_name = info.get("name", f"Sector {sector_id}") if info else f"Sector {sector_id}"
+    sector_env = info.get("environment", "") if info else ""
+    sector_perks = info.get("perks", "") if info else ""
     set_sector(u_id, sector_id)
 
     inventory = get_inventory(u_id)
@@ -882,8 +887,10 @@ async def teleport_destination(callback: types.CallbackQuery):
     await callback.message.edit_text(
         f"✨ *TELEPORTATION COMPLETE*\n"
         f"━━━━━━━━━━━━━━━\n"
-        f"📍 Arrived at: *#{sector_id} {sector_name.upper()}*\n\n"
-        f"Your teleport has been consumed. Explore the sector and earn new rewards!",
+        f"📍 Arrived at: *#{sector_id} {sector_name.upper()}*\n"
+        + (f"🌍 {sector_env}\n" if sector_env else "")
+        + (f"⚡ Perks: {sector_perks}\n" if sector_perks else "")
+        + f"\nYour teleport has been consumed. Explore the sector and earn new rewards!",
         parse_mode="Markdown"
     )
 
@@ -895,15 +902,15 @@ async def teleport_item_callback(callback: types.CallbackQuery):
     if not m:
         return
 
-    item_index = int(m.group())
+    item_id = int(m.group())
     u_id = str(callback.from_user.id)
     inventory = get_inventory(u_id)
 
-    if item_index < 0 or item_index >= len(inventory):
+    item = next((it for it in inventory if it.get("id") == item_id), None)
+    if not item:
         await callback.answer("Invalid item. what are you trying to do? Lose your mind?", show_alert=True)
         return
 
-    item = inventory[item_index]
     if item.get("type", "").lower() != "teleport":
         await callback.answer("That's not a teleport! Oh, so you can't see now to where you're going? Pitiful", show_alert=True)
         return
@@ -912,13 +919,16 @@ async def teleport_item_callback(callback: types.CallbackQuery):
     all_sectors = load_sectors()
     keyboard = []
     for sid in range(1, 10):
-        sname = all_sectors.get(sid, f"Sector {sid}")
+        info = all_sectors.get(sid, {})
+        sname = info.get("name", f"Sector {sid}") if info else f"Sector {sid}"
+        perks = info.get("perks", "") if info else ""
+        btn_text = f"#{sid} {sname}  {perks}" if perks else f"#{sid} {sname}"
         keyboard.append([InlineKeyboardButton(
-            text=f"#{sid} {sname}",
+            text=btn_text,
             callback_data=f"teleport_to_{sid}"
         )])
     keyboard.append([InlineKeyboardButton(
-        text="🔒 Sectors 10-64 (LOCKED)",
+        text="🔒 Sectors 10-64 (LOCKED — Level up to unlock)",
         callback_data="locked_sectors"
     )])
 
@@ -1091,7 +1101,10 @@ async def crate_open_handler(message: types.Message):
     import re
     m = re.search(r'\d+', message.text)
     if m:
-        await _open_crate(message, str(message.from_user.id), int(m.group()) - 1)
+        pos = int(m.group()) - 1  # 1-based → 0-based
+        inventory = get_inventory(str(message.from_user.id))
+        if 0 <= pos < len(inventory):
+            await _open_crate(message, str(message.from_user.id), inventory[pos]["id"])
 
 
 @dp.message(F.text.regexp(r"^!use\s+\d+$"))
@@ -1105,7 +1118,10 @@ async def use_item_handler(message: types.Message):
     import re
     m = re.search(r'\d+', message.text)
     if m:
-        await _use_item(message, str(message.from_user.id), int(m.group()) - 1)
+        pos = int(m.group()) - 1  # 1-based → 0-based
+        inventory = get_inventory(str(message.from_user.id))
+        if 0 <= pos < len(inventory):
+            await _use_item(message, str(message.from_user.id), inventory[pos]["id"])
 
 
 @dp.message(F.chat.type.in_({"group", "supergroup"}))
