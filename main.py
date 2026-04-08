@@ -404,6 +404,7 @@ async def start_game(message: types.Message):
     asyncio.create_task(run_auto_harvest(message, chat_id))
 
 
+
 @dp.message(F.text == "!forcerestart")
 async def force_restart(message: types.Message):
     """Force-end the current round immediately."""
@@ -412,7 +413,11 @@ async def force_restart(message: types.Message):
             "🃏 *GameMaster:* \"Use this in the group, fool.\"",
             parse_mode="Markdown"
         )
+        member = await message.chat.get_member(message.from_user.id)
         return
+    if member.status not in ["administrator", "creator"]:
+        return await message.reply("Only admins can do this.")
+    
 #Only admins should be able to use !forcerestart
     chat_id = message.chat.id
     engine = get_or_create_engine(chat_id)
@@ -462,16 +467,13 @@ async def on_group_message(message: types.Message):
 
     text = message.text.strip()
 
-    # Ignore commands
-    if text.startswith("!"):
-        return
-
     chat_id = message.chat.id
     engine = get_or_create_engine(chat_id)
     u_id = str(message.from_user.id)
 
     # ── New player enters the group ───────────────────────
     if not get_user(u_id):
+        
         # Only react occasionally so it's not spammy for every message
         if random.random() < 0.3:
             await message.reply(
@@ -1199,7 +1201,6 @@ async def use_item_handler(message: types.Message):
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
