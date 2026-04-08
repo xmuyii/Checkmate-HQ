@@ -2,7 +2,7 @@
 WORD FUSION GAME ENGINE - aiogram implementation
 Handles 60-second rounds, scoring, leaderboards
 """
-
+ 
 import asyncio
 import random
 from datetime import datetime
