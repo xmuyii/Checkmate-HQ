@@ -413,12 +413,17 @@ async def force_restart(message: types.Message):
             "🃏 *GameMaster:* \"Use this in the group, fool.\"",
             parse_mode="Markdown"
         )
-        member = await message.chat.get_member(message.from_user.id)
         return
+
+    # Only admins can use !forcerestart
+    member = await message.chat.get_member(message.from_user.id)
     if member.status not in ["administrator", "creator"]:
-        return await message.reply("Only admins can do this.")
-    
-#Only admins should be able to use !forcerestart
+        await message.reply(
+            "🃏 *GameMaster:* \"You think YOU can restart MY game? Pathetic. Admins only.\"",
+            parse_mode="Markdown"
+        )
+        return
+
     chat_id = message.chat.id
     engine = get_or_create_engine(chat_id)
 
@@ -458,97 +463,6 @@ async def on_message_reaction(event: types.MessageReactionUpdated):
     ):
         engine.crate_claimers.append({'user_id': event.user_id, 'username': ''})
 
-
-@dp.message(F.chat.type.in_({"group", "supergroup"}))
-async def on_group_message(message: types.Message):
-    """Process word guesses from group chat."""
-    if not message.text:
-        return
-
-    text = message.text.strip()
-
-    chat_id = message.chat.id
-    engine = get_or_create_engine(chat_id)
-    u_id = str(message.from_user.id)
-
-    # ── New player enters the group ───────────────────────
-    if not get_user(u_id):
-        
-        # Only react occasionally so it's not spammy for every message
-        if random.random() < 0.3:
-            await message.reply(
-                "🃏 *GameMaster:* \"Who dares speak in my arena unregistered?\"\n\n"
-                "\"Your soul is not in my records. "
-                "Come to my DMs first, register, *then* you may waste your time. Definitely not mine.\"",
-                parse_mode="Markdown"
-            )
-        return
-
-    # ── Word repeat every 4 messages ─────────────────────
-    if engine.active:
-        engine.message_count += 1
-        if engine.message_count >= 4:
-            await message.answer(
-                f"📌 *The words are still:* `{engine.word1}`  `{engine.word2}`",
-                parse_mode="Markdown"
-            )
-            engine.message_count = 0
-
-    # ── Must be in active round ───────────────────────────
-    if not engine.active:
-        guess = text.lower()
-        if len(guess) >= 3 and engine.letters and is_anagram(guess, engine.letters):
-            await message.reply(
-                "🛑 *GameMaster:* \"The round is OVER. "
-                "Are you slow? Type `!fusion` to start a new one.\"",
-                parse_mode="Markdown"
-            )
-        return
-
-    guess = text.lower()
-
-    # Minimum length
-    if len(guess) < 3:
-        return
-
-    # Already used
-    if guess in engine.used_words:
-        await message.reply(f"❌ `{guess.upper()}` was already guessed this round!")
-        return
-
-    # Anagram check
-    if not is_anagram(guess, engine.letters):
-        return  # silently ignore non-anagrams
-
-    # Dictionary check
-    if await check_supabase_dict(guess):
-        pts = len(guess) - 2
-        engine.used_words.append(guess)
-
-        add_points(u_id, pts, message.from_user.first_name)
-        add_xp(u_id, pts)
-        old_level, new_level = check_level_up(u_id)
-
-        if u_id not in engine.scores:
-            engine.scores[u_id] = {
-                "pts": 0,
-                "name": message.from_user.first_name,
-                "user_id": u_id,
-                "leveled_up": False
-            }
-        engine.scores[u_id]["pts"] += pts
-
-        feedback = f"✅ `{guess.upper()}` +{pts} pts  ⭐ +{pts} XP"
-        if old_level and new_level:
-            feedback += f"\n🎊 *LEVEL UP!* {old_level} → {new_level}"
-            engine.scores[u_id]["leveled_up"] = True
-
-        await message.reply(feedback, parse_mode="Markdown")
-
-
-# ─────────────────────────────────────────────
-#  LEADERBOARDS
-# ─────────────────────────────────────────────
 
 @dp.message(F.text == "!weekly")
 async def show_weekly(message: types.Message):
@@ -1193,6 +1107,97 @@ async def use_item_handler(message: types.Message):
     if m:
         await _use_item(message, str(message.from_user.id), int(m.group()) - 1)
 
+
+@dp.message(F.chat.type.in_({"group", "supergroup"}))
+async def on_group_message(message: types.Message):
+    """Process word guesses from group chat."""
+    if not message.text:
+        return
+
+    text = message.text.strip()
+
+    chat_id = message.chat.id
+    engine = get_or_create_engine(chat_id)
+    u_id = str(message.from_user.id)
+
+    # ── New player enters the group ───────────────────────
+    if not get_user(u_id):
+        
+        # Only react occasionally so it's not spammy for every message
+        if random.random() < 0.3:
+            await message.reply(
+                "🃏 *GameMaster:* \"Who dares speak in my arena unregistered?\"\n\n"
+                "\"Your soul is not in my records. "
+                "Come to my DMs first, register, *then* you may waste your time. Definitely not mine.\"",
+                parse_mode="Markdown"
+            )
+        return
+
+    # ── Word repeat every 4 messages ─────────────────────
+    if engine.active:
+        engine.message_count += 1
+        if engine.message_count >= 4:
+            await message.answer(
+                f"📌 *The words are still:* `{engine.word1}`  `{engine.word2}`",
+                parse_mode="Markdown"
+            )
+            engine.message_count = 0
+
+    # ── Must be in active round ───────────────────────────
+    if not engine.active:
+        guess = text.lower()
+        if len(guess) >= 3 and engine.letters and is_anagram(guess, engine.letters):
+            await message.reply(
+                "🛑 *GameMaster:* \"The round is OVER. "
+                "Are you slow? Type `!fusion` to start a new one.\"",
+                parse_mode="Markdown"
+            )
+        return
+
+    guess = text.lower()
+
+    # Minimum length
+    if len(guess) < 3:
+        return
+
+    # Already used
+    if guess in engine.used_words:
+        await message.reply(f"❌ `{guess.upper()}` was already guessed this round!")
+        return
+
+    # Anagram check
+    if not is_anagram(guess, engine.letters):
+        return  # silently ignore non-anagrams
+
+    # Dictionary check
+    if await check_supabase_dict(guess):
+        pts = len(guess) - 2
+        engine.used_words.append(guess)
+
+        add_points(u_id, pts, message.from_user.first_name)
+        add_xp(u_id, pts)
+        old_level, new_level = check_level_up(u_id)
+
+        if u_id not in engine.scores:
+            engine.scores[u_id] = {
+                "pts": 0,
+                "name": message.from_user.first_name,
+                "user_id": u_id,
+                "leveled_up": False
+            }
+        engine.scores[u_id]["pts"] += pts
+
+        feedback = f"✅ `{guess.upper()}` +{pts} pts  ⭐ +{pts} XP"
+        if old_level and new_level:
+            feedback += f"\n🎊 *LEVEL UP!* {old_level} → {new_level}"
+            engine.scores[u_id]["leveled_up"] = True
+
+        await message.reply(feedback, parse_mode="Markdown")
+
+
+# ─────────────────────────────────────────────
+#  LEADERBOARDS
+# ─────────────────────────────────────────────
 
 # ─────────────────────────────────────────────
 #  ENTRY POINT
