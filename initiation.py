@@ -368,7 +368,7 @@ async def backpack_choice_handler(callback: types.CallbackQuery, state: FSMConte
     ]
     
     for crate_type, xp_reward in crate_configs:
-        add_unclaimed_item(user_id, crate_type, xp_reward)
+        add_unclaimed_item(user_id, crate_type, amount=1, xp_reward=xp_reward)
     
     # Award FREE teleport item as UNCLAIMED
     add_unclaimed_item(user_id, "teleport", 1)
@@ -384,7 +384,7 @@ async def backpack_choice_handler(callback: types.CallbackQuery, state: FSMConte
     # Show final tutorial completion message
     await callback.message.edit_text(
         f"✨ *TUTORIAL COMPLETE!*\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"━━━━━━━━━━━━━TUTORIAL━━━━━━━━\n\n"
         f"🌍 **YOU ARE BEING DROPPED IN:**\n"
         f"📍 *#{sector_id} {sector_name.upper()}*\n"
         + (f"🗺️ {sector_env}\n" if sector_env else "")
