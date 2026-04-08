@@ -20,7 +20,7 @@ from fusion_handlers import word_fusion_router
 from initiation import initiation_router
 
 # ── Config ────────────────────────────────────────────────────────────────
-API_TOKEN    = '8770224655:AAFAHmPzdwCRbi5Y7VfO6cCBpuHZdT_dI2I'
+API_TOKEN    = '8770224655:AAHwmeIEnu0IPusu8XzumEhmMOLGcCGqMs0'
 SUPABASE_URL = 'https://basniiolppmtpzishhtn.supabase.co'.rstrip('/')
 SUPABASE_KEY = ('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.'
                 'eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhc25paW9scHBtdHB6aXNoaHRuIiwicm9sZSI6'
