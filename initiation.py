@@ -13,7 +13,7 @@ from database import (
     add_unclaimed_item, get_sector_display, get_unclaimed_items
 )
 
-API_TOKEN    = '8770224655:AAFAHmPzdwCRbi5Y7VfO6cCBpuHZdT_dI2I'
+API_TOKEN    = '8770224655:AAHYPEb_VeX2Xpr80emmD5FIhFKdCkYfCMA'
 SUPABASE_URL = 'https://basniiolppmtpzishhtn.supabase.co'.rstrip('/')
 SUPABASE_KEY = ('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.'
                 'eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhc25paW9scHBtdHB6aXNoaHRuIiwicm9sZSI6'
