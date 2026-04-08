@@ -534,16 +534,6 @@ async def show_profile(message: types.Message):
         return
 
     u_id = str(message.from_user.id)
-    user = get_user(u_id)
-    
-    # If user lost somehow, notify them
-    if not user:
-        await message.answer(
-            "🃏 *GameMaster:* \"Your account was lost. Restart with `!tutorial` to recover.\"",
-            parse_mode="Markdown"
-        )
-        return
-    
     profile = get_profile(u_id)
     if not profile:
         await message.answer(
@@ -591,8 +581,7 @@ async def show_inventory(message: types.Message):
         return
 
     u_id = str(message.from_user.id)
-    user = get_user(u_id)
-    if not user:
+    if not get_user(u_id):
         await message.answer(
             "🃏 *GameMaster:* \"You have no inventory. You have nothing. "
             "You ARE nothing. Register first.\"",
