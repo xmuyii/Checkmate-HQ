@@ -10,7 +10,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ChatMember
 from database import (
     get_user, register_user, add_silver, set_sector, 
     add_inventory_item, get_profile, add_xp, save_user, load_sectors,
-    add_unclaimed_item, get_sector_display
+    add_unclaimed_item, get_sector_display, get_unclaimed_items
 )
 
 # Reuse credentials from main.py
@@ -357,8 +357,14 @@ async def backpack_choice_handler(callback: types.CallbackQuery, state: FSMConte
         save_user(user_id, user)
     
     # Award rewards as UNCLAIMED items (players must claim to inventory)
+    items_added = []
+    
     # Shield (1 day)
-    add_unclaimed_item(user_id, "shield", 1)
+    try:
+        if add_unclaimed_item(user_id, "shield", 1):
+            items_added.append("shield")
+    except Exception as e:
+        pass
     
     # Award 3 crates as UNCLAIMED: wood, bronze, iron
     crate_configs = [
@@ -368,10 +374,22 @@ async def backpack_choice_handler(callback: types.CallbackQuery, state: FSMConte
     ]
     
     for crate_type, xp_reward in crate_configs:
-        add_unclaimed_item(user_id, crate_type, amount=1, xp_reward=xp_reward)
+        try:
+            if add_unclaimed_item(user_id, crate_type, amount=1, xp_reward=xp_reward):
+                items_added.append(crate_type)
+        except Exception as e:
+            pass  # Continue adding other items
     
     # Award FREE teleport item as UNCLAIMED
-    add_unclaimed_item(user_id, "teleport", 1)
+    try:
+        if add_unclaimed_item(user_id, "teleport", 1):
+            items_added.append("teleport")
+    except Exception as e:
+        pass
+    
+    # Verify items were added
+    unclaimed = get_unclaimed_items(user_id)
+    item_count = len(unclaimed) if unclaimed else 0
     
     # Try to add user to Checkmate HQ group
     try:
@@ -382,16 +400,17 @@ async def backpack_choice_handler(callback: types.CallbackQuery, state: FSMConte
         pass
     
     # Show final tutorial completion message
+    status_msg = f"✅ {item_count} items" if item_count > 0 else "⚠️ Items failed to load"
+    
     await callback.message.edit_text(
         f"✨ *TUTORIAL COMPLETE!*\n"
-        f"━━━━━━━━━━━━━TUTORIAL━━━━━━━━\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"🌍 **YOU ARE BEING DROPPED IN:**\n"
         f"📍 *#{sector_id} {sector_name.upper()}*\n"
         + (f"🗺️ {sector_env}\n" if sector_env else "")
         + (f"⚡ Perks: {sector_perks}\n" if sector_perks else "")
         + f"\n🎒 **BACKPACK TYPE:** Normal Backpack (5 slots)\n\n"
-        f"🎁 **STARTER REWARDS WAITING:**\n"
-        f"You've received 5 items! They are **unclaimed**.\n\n"
+        f"🎁 **STARTER REWARDS WAITING:** {status_msg}\n\n"
         f"📦 Items Awaiting:\n"
         f"🛡️ Shield (1-day, expires tomorrow)\n"
         f"🪵 Wood Crate (50-100 XP)\n"
