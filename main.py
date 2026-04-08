@@ -411,17 +411,17 @@ async def force_restart(message: types.Message):
 
 @dp.message_reaction()
 async def on_message_reaction(event: types.MessageReactionUpdated):
-    if not event.user_id:
+    if not event.user.id:
         return
     chat_id = event.chat.id
     engine  = get_or_create_engine(chat_id)
     if (
         engine.crate_drop_message_id == event.message_id
         and engine.crates_dropping > 0
-        and event.user_id not in [c['user_id'] for c in engine.crate_claimers]
+        and event.user.id not in [c['user_id'] for c in engine.crate_claimers]
         and len(engine.crate_claimers) < 3
     ):
-        engine.crate_claimers.append({'user_id': event.user_id, 'username': ''})
+        engine.crate_claimers.append({'user_id': event.user.id, 'username': ''})
 
 
 # ═══════════════════════════════════════════════════════════════════════════
