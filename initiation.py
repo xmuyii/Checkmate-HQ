@@ -15,7 +15,7 @@ from database import (
 )
 
 # ── Config (Read from Environment Variables) ──────────────────────────────────
-API_TOKEN    = os.environ.get('API_TOKEN', '8770224655:AAHwmeIEnu0IPusu8XzumEhmMOLGcCGqMs0')
+API_TOKEN    = os.environ.get('API_TOKEN', '8770224655:AAElFUaS_9ZMFsowhkWPtSU_9LwzdKMqGoU')
 SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://basniiolppmtpzishhtn.supabase.co').rstrip('/')
 SUPABASE_KEY = os.environ.get('SUPABASE_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJhc25paW9scHBtdHB6aXNoaHRuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTQ3NjMwOCwiZXhwIjoyMDkxMDUyMzA4fQ.qrj1BO5dNilRDvgKtvTdwIWjBhFTRyGzuHPD271Xcac')
 CHECKMATE_HQ_GROUP_ID = int(os.environ.get('CHECKMATE_HQ_GROUP_ID', '-1003835925366'))
