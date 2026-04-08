@@ -581,7 +581,8 @@ async def show_inventory(message: types.Message):
         return
 
     u_id = str(message.from_user.id)
-    if not get_user(u_id):
+    user = get_user(u_id)
+    if not user:
         await message.answer(
             "🃏 *GameMaster:* \"You have no inventory. You have nothing. "
             "You ARE nothing. Register first.\"",
@@ -732,6 +733,13 @@ async def show_claims(message: types.Message):
 @dp.callback_query(F.data.startswith("claim_"))
 async def claim_item_callback(query: types.CallbackQuery):
     u_id = str(query.from_user.id)
+    
+    # Auto-register if somehow lost
+    user = get_user(u_id)
+    if not user:
+        await query.answer("Your account was lost. Please restart with !tutorial", show_alert=True)
+        return
+    
     try:
         item_id = int(query.data.split("_")[1])
     except (IndexError, ValueError):
@@ -791,6 +799,14 @@ async def info_item_callback(callback: types.CallbackQuery):
 
 
 async def _open_crate(message: types.Message, user_id: str, item_id: int):
+    user = get_user(user_id)
+    if not user:
+        await message.answer(
+            "🃏 *GameMaster:* \"You don't exist to me. Register first.\"",
+            parse_mode="Markdown"
+        )
+        return
+
     inventory = get_inventory(user_id)
     crate = next((it for it in inventory if it.get("id") == item_id), None)
     if not crate:
@@ -817,6 +833,14 @@ async def _open_crate(message: types.Message, user_id: str, item_id: int):
 
 
 async def _use_item(message: types.Message, user_id: str, item_id: int):
+    user = get_user(user_id)
+    if not user:
+        await message.answer(
+            "🃏 *GameMaster:* \"You don't exist to me. Register first.\"",
+            parse_mode="Markdown"
+        )
+        return
+
     inventory = get_inventory(user_id)
     item = next((it for it in inventory if it.get("id") == item_id), None)
     if not item:
@@ -865,6 +889,11 @@ async def teleport_destination(callback: types.CallbackQuery):
 
     sector_id = int(m.group())
     u_id = str(callback.from_user.id)
+    
+    user = get_user(u_id)
+    if not user:
+        await callback.answer("Your account was lost. Restart with !tutorial", show_alert=True)
+        return
 
     if sector_id < 1 or sector_id > 9:
         await callback.answer("That sector is locked! Not opened yet to scallywags, losers and anyone in general.", show_alert=True)
@@ -904,6 +933,12 @@ async def teleport_item_callback(callback: types.CallbackQuery):
 
     item_id = int(m.group())
     u_id = str(callback.from_user.id)
+    
+    user = get_user(u_id)
+    if not user:
+        await callback.answer("Your account was lost. Restart with !tutorial", show_alert=True)
+        return
+    
     inventory = get_inventory(u_id)
 
     item = next((it for it in inventory if it.get("id") == item_id), None)
@@ -1225,3 +1260,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+     
