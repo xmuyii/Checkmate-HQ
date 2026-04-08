@@ -8,12 +8,12 @@ SECTORS_FILE = os.environ.get("SECTORS_FILE", "sectors.txt")
 def load_data():
     if not os.path.exists(DB_FILE):
         return {}
-    with open(DB_FILE, "r") as f:
+    with open(DB_FILE, "r", encoding='utf-8') as f:
         return json.load(f)
 
 def save_data(data):
-    with open(DB_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+    with open(DB_FILE, "w", encoding='utf-8') as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
 
 def save_user(user_id, data):
     all_data = load_data()
@@ -330,18 +330,22 @@ def check_level_up(user_id):
     
     return None, None
 
-def add_unclaimed_item(user_id, item_type, amount=1, multiplier_value=None):
+def add_unclaimed_item(user_id, item_type, amount=1, multiplier_value=None, xp_reward=None):
     """Add unclaimed item (must be claimed before use)"""
     user = get_user(user_id)
     if not user:
+        # Auto-register if missing (shouldn't happen, but safety fallback)
         return False
     
     unclaimed = user.get("unclaimed_items", [])
+    if not isinstance(unclaimed, list):
+        unclaimed = []
     
     item = {
         "id": (max((it.get("id", 0) for it in unclaimed), default=-1) + 1),
         "type": item_type,
         "amount": amount,
+        "xp_reward": xp_reward if xp_reward is not None else amount,  # Explicit XP for crates
         "multiplier_value": multiplier_value,  # For multiplier items
         "created_at": datetime.now().isoformat()
     }
@@ -391,7 +395,7 @@ def claim_item(user_id, item_id):
     new_item = {
         "id": (max((it.get("id", 0) for it in inventory), default=-1) + 1),
         "type": item.get("type"),
-        "xp_reward": item.get("amount", 0),
+        "xp_reward": item.get("xp_reward", item.get("amount", 0)),  # Use xp_reward if set, else amount
         "multiplier_value": item.get("multiplier_value"),
         "created_at": item.get("created_at")
     }
